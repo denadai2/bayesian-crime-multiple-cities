@@ -44,6 +44,8 @@ The code of the analysis in divided in two parts: the Python scripts and modules
 * `manuscript_extra_plots.ipynb` : script used to create some supplementary plots.
 * `pystan_fit4.py` : script used to do all the fits (non necessary if you use the aforementioned bash scripts).
 
+To do the preprocess steps, please configure `postgres_example.yaml` and rename it to `postgres.yaml`.
+
 # Data
 
 ### Computed
@@ -62,10 +64,10 @@ pg_restore -d crime-environment -U username -C 2020_04_08.sqldump.gz
 ```
 
 ### Aggregated
-Available upon the acceptance of the paper
+Available through permanent links upon the acceptance of the paper
 
 ### Raw
-Available upon the acceptance of the paper
+Available through permanent links upon the acceptance of the paper
 
 
 ## License
