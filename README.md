@@ -62,10 +62,10 @@ pg_restore -d crime-environment -U username -C 2020_04_08.sqldump.gz
 ```
 
 ### Aggregated
-Available upon the acceptance of the paper
+Available through permanent links upon the acceptance of the paper
 
 ### Raw
-Available upon the acceptance of the paper
+Available through permanent links upon the acceptance of the paper
 
 
 ## License
