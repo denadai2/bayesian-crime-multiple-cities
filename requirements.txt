@@ -77,7 +77,7 @@ Theano==1.0.2
 tornado==5.1
 tqdm==4.25.0
 traitlets==4.3.2
-urllib3==1.23
+urllib3==1.24.2
 wcwidth==0.1.7
 webencodings==0.5.1
 widgetsnbextension==3.4.0
