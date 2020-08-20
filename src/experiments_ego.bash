@@ -25,3 +25,24 @@ do
         eval $command
 	done
 done
+
+
+cities=("bogota" "boston" "LA" "chicago")
+models=("--sd" "--uf" "--m" "--full" "--sd --uf" "--sd --m" "--uf --m" "--core-only")
+modelstype=("BSF")
+for c in "${cities[@]}"
+do
+    for tp in "${modelstype[@]}"
+    do
+        {
+        for m in "${models[@]}"
+        do
+            command="nice python3 pystan_fit4.py --city ${c} -S 'core' -M ${tp} ${m} -R 1 &> '../data/generated_files/logs/$c-core-${m}-${tp}.log' &"
+
+            echo $command
+            eval $command
+        done
+        }
+        wait
+	done
+done

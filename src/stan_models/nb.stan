@@ -47,6 +47,7 @@ generated quantities {
     vector[N] llnoRE;
     int<lower=0> y_pred[N];
     int<lower=0> y_pred_full[N];
+    vector[N] randomE;
     vector[N] fixedE = X_Q * betas_tilde;
     real intercept = beta0;
     vector[N] eta = intercept + fixedE;
@@ -70,6 +71,7 @@ generated quantities {
             log_lik[i] = neg_binomial_2_lpmf(y[i] | mu[i], phi2);
             llnoRE[i] = neg_binomial_2_lpmf(y[i] | mu[i], phi2);
         }
+        randomE[i] = 0;
 
     }
 }

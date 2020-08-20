@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 cities=("bogota" "boston" "LA" "chicago")
-models=("--sd" "--uf" "--m" "--full" "--sd --uf" "--sd --m" "--uf --m" "--core-only")
-modelstype=("BSF" "REESF-a" "ESF")
+models=("--sd" "--uf" "--m" "--full" "--sd --uf" "--sd --m" "--uf --m" "--core-only" "--minimal")
+modelstype=("BSF" "REESF-a" "ESF" "BSF_ODall" "nb")
 for c in "${cities[@]}"
 do
     for tp in "${modelstype[@]}"

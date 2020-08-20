@@ -42,11 +42,18 @@ def make_argument_parser():
                         help='Spatial name for the spatial_groups', default='ego')
     parser.add_argument('--dependent', '-D',
                         help='Depedent variable (crime/people ...)', default='ncrimes', choices=['ncrimes',
-                                                                                                 'ambient'])
+                                                                                                 'ambient',
+                                                                                                 'Property crime',
+                                                                                                 'Violent crime'])
     parser.add_argument('--removeprogressbar', '-R',
                         help='Progressbar remove?', default=None)
     parser.add_argument('--model', '-M',
-                        help='Name of the model to be used', default='BSF', choices=['nb', 'ESF', 'REESF', 'REESF-a', 'BSF'])
+                        help='Name of the model to be used', default='BSF', choices=['nb', 'ESF', 'REESF', 'REESF-a', 'BSF', 'BSF_ODall'])
+    parser.add_argument('--normalization', '-Y',
+                        help='Normalization for the mobility matrix', default=None,
+                        choices=[None, 'pop', 'eff'])
+    # Brokmann normalization by outgoing fluxes from A
+    # pop = average number of trips between ABBA
 
     parser.add_argument('--test', nargs='+', help='Test features')
 
@@ -66,10 +73,12 @@ def make_argument_parser():
     parser.add_argument('--no-od-m', dest='ODm', action='store_false')
     parser.add_argument('--od-d', dest='ODd', action='store_true')
     parser.add_argument('--no-od-d', dest='ODd', action='store_false')
+    parser.add_argument('--od-md', dest='ODmd', action='store_true')
+    parser.add_argument('--no-od-md', dest='ODmd', action='store_false')
     parser.add_argument('--CV', dest='CV', action='store_true')
     parser.add_argument('--no-CV', dest='CV', action='store_false')
 
-    parser.set_defaults(sd=False, uf=False, m=False, full=False, core=False, ODm=False, ODd=False, CV=False, test=False, minimal=False)
+    parser.set_defaults(sd=False, uf=False, m=False, full=False, core=False, ODm=False, ODd=False, CV=False, test=False, minimal=False, ODmd=False)
     return parser
 
 
@@ -90,8 +99,12 @@ def make_model_name(args):
         name = ['minimal']
     if args.ODm:
         name.append('ODm')
+        if args.normalization:
+            name.append(args.normalization)
     elif args.ODd:
         name.append('ODd')
+    elif args.ODmd:
+        name.append('ODmd')
     name = '_'.join(name)
     model_name = '{test}{city}_{spatial_name}_{name}_{iterations}_{dependent}'.format(test=('-'.join(args.test))+'_' if args.test else '',
                                                                                        iterations=args.iterations,
@@ -133,11 +146,12 @@ def load_data(args, CITY=None):
     data_df = data_df.sort_values(['city', 'sp_id']).reset_index(drop=True)
 
     # SPATIAL WEIGHTS
+    W2 = None
     if args.ODd:
         fname = '../data/generated_files/spatial_dmatrix.parquet'
         filesize = os.path.getsize(fname)
         hash_md5 = hashlib.md5(str(filesize).encode('utf-8')).hexdigest()
-        cache_name = '../cache/{city}_{hex}.npz'.format(city=CITY, hex=hash_md5)
+        cache_name = '../cache/{city}_{spatial_name}_{hex}.npz'.format(city=CITY, hex=hash_md5, spatial_name=args.spatial_name)
         if os.path.exists(cache_name):
             W = np.load(cache_name)['W']
         else:
@@ -182,7 +196,7 @@ def load_data(args, CITY=None):
     elif args.ODm:
         filesize = os.path.getsize('../data/generated_files/{city}_ODs.csv'.format(city=args.city))
         hash_md5 = hashlib.md5(str(filesize).encode('utf-8')).hexdigest()
-        cache_name = '../cache/{city}_m_{hex}.npz'.format(city=CITY, hex=hash_md5)
+        cache_name = '../cache/{city}_{spatial_name}_m_{hex}.npz'.format(city=CITY, hex=hash_md5, spatial_name=args.spatial_name)
         if os.path.exists(cache_name):
             W = np.load(cache_name)['W']
         else:
@@ -192,20 +206,146 @@ def load_data(args, CITY=None):
 
             ODs_matrix_df = ODs_matrix_df[ODs_matrix_df.index.isin(data_df['sp_id'].values)]
             ODs_matrix_df = ODs_matrix_df[[x for x in data_df['sp_id'].values]]
+
+            if args.normalization == 'pop':
+                ODs_matrix_df = ODs_matrix_df.stack().reset_index()
+                ODs_matrix_df.columns = ['o_sp_id', 'd_sp_id', 'flow']
+                ODs_matrix_df = pd.merge(ODs_matrix_df,
+                                         data_df.set_index('sp_id')[['population']].rename(
+                                             columns={'population': 'o_pop'}),
+                                         left_on='o_sp_id', right_index=True)
+                ODs_matrix_df = pd.merge(ODs_matrix_df,
+                                         data_df.set_index('sp_id')[['population']].rename(
+                                             columns={'population': 'd_pop'}),
+                                         left_on='d_sp_id', right_index=True)
+                ODs_matrix_df.loc[:, 'flow'] = ODs_matrix_df['flow'] / (ODs_matrix_df['o_pop'] + ODs_matrix_df['d_pop'] + 1)
+                ODs_matrix_df = ODs_matrix_df.pivot(index='o_sp_id', columns='d_sp_id', values='flow')
+            elif args.normalization == 'eff':
+                ODs_matrix_df.loc[:, ODs_matrix_df.columns] = ODs_matrix_df[ODs_matrix_df.columns] / ODs_matrix_df.sum(1)
+
             ODs_matrix_df = ODs_matrix_df.sort_index()
-
             ODs_weights = ODs_matrix_df.fillna(0).values
-            ODs_weights = (ODs_weights + ODs_weights.T)
             np.fill_diagonal(ODs_weights, 0)
-
             W = np.nan_to_num(ODs_weights).astype(np.float32)
-            W = W/W.max()
+            W = (W + W.T)/2
 
             print("Saving cache W")
             np.savez_compressed(cache_name, W=W)
+    elif args.ODmd:
+        fname = '../data/generated_files/spatial_dmatrix.parquet'
+        filesize = os.path.getsize(fname)
+        filesize += os.path.getsize('../data/generated_files/{city}_ODs.csv'.format(city=args.city))
+        hash_md5 = hashlib.md5(str(filesize).encode('utf-8')).hexdigest()
+        cache_name = '../cache/{city}_{spatial_name}_ODmd_{hex}.npz'.format(city=CITY, hex=hash_md5,
+                                                                       spatial_name=args.spatial_name)
+        if 1==0 and os.path.exists(cache_name):
+            W = np.load(cache_name)['W']
+        else:
+            weights_df = pd.read_parquet(fname)
+            weights_df = weights_df[(weights_df['spatial_name'] == args.spatial_name)]
+            weights_df = weights_df.sort_values(['city', 'o_sp_id'])
+            weights_df['o'] = weights_df.city + '_' + weights_df.o_sp_id.astype(str)
+            weights_df['d'] = weights_df.city + '_' + weights_df.d_sp_id.astype(str)
+
+            if CITY:
+                weights_df = weights_df[weights_df.city == CITY]
+
+            # TODO: remove
+            weights_df = weights_df.sort_values(['city', 'o_sp_id']).reset_index(drop=True)
+            print("data_shape", data_df.values.shape)
+            print("weights n", len(set(weights_df['o_sp_id'].values).union(set(weights_df['d_sp_id'].values))))
+
+            # Distance threshold
+            weights_df = weights_df[(weights_df['w'] > 0)]
+
+            # Transform weights in [node_index1, node_index2]
+            # TODO bug when CITY is not specified
+            # TODO sp_ids non esistenti
+            weights_df = weights_df[weights_df['o_sp_id'].isin(data_df['sp_id'].values)]
+            weights_df = weights_df[weights_df['d_sp_id'].isin(data_df['sp_id'].values)]
+
+            weights_df.loc[:, 'w'] = 1/weights_df['w']
+            W = scipy.spatial.distance.squareform(weights_df.sort_values(['o_sp_id', 'd_sp_id'])['w'].values)
+
+            ODs_matrix_df = pd.read_csv('../data/generated_files/{city}_ODs.csv'.format(city=args.city),
+                                        dtype={'o_sp_id': str}).set_index('o_sp_id')
+            ODs_matrix_df.columns = [str(x) for x in ODs_matrix_df.columns]
+
+            ODs_matrix_df = ODs_matrix_df[ODs_matrix_df.index.isin(data_df['sp_id'].values)]
+            ODs_matrix_df = ODs_matrix_df[[x for x in data_df['sp_id'].values]]
+            ODs_matrix_df = ODs_matrix_df.sort_index()
+
+            ODs_weights = ODs_matrix_df.fillna(0).values
+            ODs_weights = (ODs_weights + ODs_weights.T)/2
+            np.fill_diagonal(ODs_weights, 0)
+
+            W_OD = np.nan_to_num(ODs_weights).astype(np.float32)
+
+            # normalize
+            W_OD = W_OD / W_OD.sum()
+            W = W / W.sum()
+
+            # Merge the matrices
+            W = 0.5*W + 0.5*W_OD
+            assert 0.9 < W.sum() < 1.1
+            print("Saving cache W MD")
+            np.savez_compressed(cache_name, W=W)
+    elif args.model == 'BSF_ODall':
+        fname = '../data/generated_files/spatial_dmatrix.parquet'
+        weights_df = pd.read_parquet(fname)
+        weights_df = weights_df[(weights_df['spatial_name'] == args.spatial_name)]
+        weights_df = weights_df.sort_values(['city', 'o_sp_id'])
+        weights_df['o'] = weights_df.city + '_' + weights_df.o_sp_id.astype(str)
+        weights_df['d'] = weights_df.city + '_' + weights_df.d_sp_id.astype(str)
+
+        if CITY:
+            weights_df = weights_df[weights_df.city == CITY]
+
+        # TODO: remove
+        weights_df = weights_df.sort_values(['city', 'o_sp_id']).reset_index(drop=True)
+        print("data_shape", data_df.values.shape)
+        print("weights n", len(set(weights_df['o_sp_id'].values).union(set(weights_df['d_sp_id'].values))))
+        # Distance threshold
+        weights_df = weights_df[(weights_df['w'] > 0)]
+
+        # Transform weights in [node_index1, node_index2]
+        # TODO bug when CITY is not specified
+        # TODO sp_ids non esistenti
+        weights_df = weights_df[weights_df['o_sp_id'].isin(data_df['sp_id'].values)]
+        weights_df = weights_df[weights_df['d_sp_id'].isin(data_df['sp_id'].values)]
+
+        W = scipy.spatial.distance.squareform(weights_df.sort_values(['o_sp_id', 'd_sp_id'])['w'].values)
+
+        Tcsr = minimum_spanning_tree(csr_matrix(W))
+
+        t = Tcsr.max()
+        print("threshold", t)
+        W[W > t] = 0.
+        print(W[W > t])
+        idxs = np.argwhere((W > 0))
+        rows, cols = idxs[:, 0], idxs[:, 1]
+        # W[rows, cols] = np.exp(-W[rows, cols]/t)
+        W[rows, cols] = 1 - (W[rows, cols] / (4 * t)) ** 2
+        # W[rows, cols] = 1.-(W[rows, cols]/(4*t))**2
+
+        ODs_matrix_df = pd.read_csv('../data/generated_files/{city}_ODs.csv'.format(city=args.city),
+                                    dtype={'o_sp_id': str}).set_index('o_sp_id')
+        ODs_matrix_df.columns = [str(x) for x in ODs_matrix_df.columns]
+
+        ODs_matrix_df = ODs_matrix_df[ODs_matrix_df.index.isin(data_df['sp_id'].values)]
+        ODs_matrix_df = ODs_matrix_df[[x for x in data_df['sp_id'].values]]
+        ODs_matrix_df = ODs_matrix_df.sort_index()
+
+        ODs_weights = ODs_matrix_df.fillna(0).values
+        ODs_weights = (ODs_weights + ODs_weights.T)/2
+        np.fill_diagonal(ODs_weights, 0)
+
+        W2 = np.nan_to_num(ODs_weights).astype(np.float32)
+        W2 = W2 / W2.sum()
+
     else:
         fname = '../data/generated_files/egohoods_intersects.parquet'
-        cache_name = '../cache/{city}_ego_W.npz'.format(city=CITY)
+        cache_name = '../cache/{city}_{spatial_name}_W.npz'.format(city=CITY, spatial_name='ego')
         if os.path.exists(cache_name):
             W = np.load(cache_name)['W']
         else:
@@ -216,7 +356,7 @@ def load_data(args, CITY=None):
             if CITY:
                 weights_df = weights_df[weights_df.city == CITY]
 
-            weights_df = weights_df[weights_df['o_sp_id'] < weights_df['d_sp_id']]
+            #weights_df = weights_df[weights_df['o_sp_id'] < weights_df['d_sp_id']]
             # TODO: remove
             weights_df = weights_df.sort_values(['city', 'o_sp_id']).reset_index(drop=True)
             print("data_shape", data_df.values.shape)
@@ -241,14 +381,13 @@ def load_data(args, CITY=None):
             for a, b in zip(edges1, edges2):
                 W[a, b] = 1
 
-            W = W+W.T
+            W = (W + W.T)/2
             W[W > 0] = 1
 
             print("Saving cache W")
             np.savez_compressed(cache_name, W=W)
 
     assert np.sum(np.diagonal(W) == 0)
-    assert np.allclose(W, W.T, rtol=1e-05, atol=1e-08)
 
     print("Considered cities", set(list(data_df.city)))
 
@@ -277,10 +416,7 @@ def load_data(args, CITY=None):
     # Core Features
     features.append('core_population')
     features.extend(['core_nightlife', 'core_shops', 'core_food'])
-        #features.append('distance_bld_roads')
 
-    #features.append('core_property_value')
-    #features.append('core_nbuildings')
     if (args.full or args.m) and CITY != 'chicago':
         if args.dependent != 'ambient':
             features.append('core_ambient')
@@ -331,7 +467,8 @@ def load_data(args, CITY=None):
     y = data_df[args.dependent].values
     X = (data_df[features] - data_df[features].mean()) / data_df[features].std()
     sp_ids = data_df['sp_id'].values
-    return X, y, W, features, pp_risk, sp_ids
+    print(W.shape, X.shape)
+    return X, y, W, features, pp_risk, sp_ids, W2
 
 
 def StanModel_cache(file=None, model_code=None, model_name=None, **kwargs):
@@ -376,12 +513,12 @@ def main():
         parser.error("Either full or non-full parameters have to be specified.")
     if args.city == 'chicago' and (args.m or args.full or args.ODm):
         parser.error("Chicago has no mobility data.")
-    if args.model == 'nb' and (args.ODd or args.ODm):
+    if args.model == 'nb' and (args.ODd or args.ODm or args.ODmd):
         parser.error("Negative binomial does not use an OD matrix.")
 
     print("PARAMETERS", args)
 
-    X, y, W, features, pp_risk, sp_ids = load_data(args, args.city)
+    X, y, W, features, pp_risk, sp_ids, W2 = load_data(args, args.city)
 
     # Float32
     X = X.astype('float32')
@@ -502,6 +639,49 @@ def main():
 
         # Deallocate
         del L
+    elif args.model == 'BSF_ODall':
+        M2 = P_t.dot(W2).dot(P_t)
+
+        v2, E2 = np.linalg.eigh(M2)
+        # Best eigenvectors
+        # sortid = np.abs(v).argsort()[::-1]
+        # Best positive eigenvectors
+        sortid = v2.argsort()[::-1]
+
+        v2 = v2[sortid]
+        E2 = E2[:, sortid]
+        threshold = 0.25  # .25
+        # if args.ODm:
+        #    threshold = 0.05
+        E2 = E2[:, v2 / v2.max() >= (threshold + 1e-07)]
+        v2 = v2[v2 / v2.max() >= (threshold + 1e-07)]
+
+
+        D1 = np.diag(np.squeeze(np.asarray(W.sum(1))))
+        D2 = np.diag(np.squeeze(np.asarray(W2.sum(1))))
+        # L is the Laplacian
+        L1 = D1 - W
+        L2 = D2 - W2
+        # TODO: add a list of variables
+        new_variables = {
+            'Q1': E,
+            'W1': L1,
+            'p1': E.shape[1],
+            'Q2': E2,
+            'W2': L2,
+            'p2': E2.shape[1],
+        }
+        model_variables = {**model_variables, **new_variables}
+        model_params.extend([
+            'phi2', 'tau',  'phi'
+        ])
+        model_params_traces_toplot.extend([
+            'phi2', 'tau',
+        ])
+
+        # Deallocate
+        del L1
+        del L2
 
     elif args.model == 'nb':
         model_params.extend([
@@ -515,8 +695,8 @@ def main():
 
     start = time.time()
     control = None
-    if args.ODd or args.ODm:
-        control = {'max_treedepth': 12}
+    if args.ODd or args.ODm or args.ODmd:
+        control = {'max_treedepth': 12, 'adapt_delta': 0.9}
     fit = sm.sampling(data=model_variables, iter=args.iterations, warmup=args.tuningsteps, chains=2,
                       n_jobs=args.njobs, pars=model_params, control=control)
     print(pystan.check_hmc_diagnostics(fit))
@@ -563,6 +743,11 @@ def main():
             print("sp_ids warnings", sp_ids[loo_result[7] > 0.7])
         writer.writerow(['LOO', loo_result[0], loo_result[1], loo_result[2], 'YES' if loo_result[3] else 'NO'])
         print("LOO", loo_result[0], 'se:', loo_result[1], 'p-value', loo_result[2])
+
+        ll = -2 *np.sum(la['log_lik'], 1)
+        dic = np.mean(ll) + 0.5 * np.var(ll)
+        writer.writerow(['DIC', dic, 0.5 * np.var(ll), '', ''])
+        print("DIC", dic, 0.5 * np.var(ll))
 
         for score_name, suffix in [('y_pred_full', ' (no RE)')]:
             result_mdape = median_absolute_p_error(y + np.finfo(float).eps,

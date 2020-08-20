@@ -1,0 +1,42 @@
+MODALIDAD,num,UCR part,UCR1
+FACTOR DE OPORTUNIDAD,13300,1,Larceny-theft (except motor vehicle theft)
+ATRACO,10957,1,Robbery
+RAPONAZO,2958,1,Larceny-theft (except motor vehicle theft)
+COSQUILLEO,2486,1,Larceny-theft (except motor vehicle theft)
+MECHERO,2247,1,Arson
+LLAVES MAESTRAS,1502,1,Larceny-theft (except motor vehicle theft)
+ENGAÑO,1338,2,
+homicidios,1335,1,Criminal homicide
+VIOLACIÓN DE CERRADURAS,1302,1,Larceny-theft (except motor vehicle theft)
+VENTOSA,994,1,Larceny-theft (except motor vehicle theft)
+ROMPIMIENTO VIDRIO,504,1,Larceny-theft (except motor vehicle theft)
+ESCOPOLAMINADO,458,1,Robbery
+LLAMADA MILLONARIA,341,2,
+CLONACIÓN DE TARJETA,297,2,
+SUPL. DIJIN-SIJIN,168,1,Larceny-theft (except motor vehicle theft)
+POR INTERNET,60,2,
+ROMPIMIENTO PARED,49,1,Larceny-theft (except motor vehicle theft)
+PAQUETE CHILENO,47,2,
+SIMULANDO NECESIDAD,28,2,
+SUPL. EMPL. EMPRESAS PUBLICAS,26,2,
+POR SERVILINEA,24,2,
+SUPL. PERSONA,16,2,
+SUPL. POLICIA UNIFORMADA,15,2,
+VANDALISMO,12,2,
+RETENCION TARJETA,12,2,
+VIOLACION CAJA FUERTE,10,1,Larceny-theft (except motor vehicle theft)
+SUPL. AUTORIDADES CIVILES,9,2,
+SUPUESTO GANADOR DE LOTERIA,8,2,
+RETENCION DINERO,5,2,
+SUPL. AG. TRANSITO,5,2,
+SUPL. EMPLEADO BANCO,5,2,
+SUPL. OTRAS AUTORIDADES,4,2,
+SUPL. SERVICIOS TECNICOS,4,2,
+SUPUESTO EMBARGO,4,2,
+SUPL. CTI,4,2,
+SUPL. FISCALIA,3,2,
+SUPL. SUBVERSIVOS,2,2,
+AUTO ROBO,2,1,Motor vehicle theft
+SUPL. EJERCITO,1,2,
+SUPL. COBRADOR-VENDEDOR,1,2,
+PALANCAS,1,1,Larceny-theft (except motor vehicle theft)

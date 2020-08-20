@@ -28,9 +28,6 @@ def make_argument_parser():
     parser = argparse.ArgumentParser(
         description="Launch egohoods computation (Jacobs)"
     )
-    parser.add_argument('--aggregation', '-A',
-                        default="upz",
-                        choices=['upz', 'barrios', 'egohoods'])
     parser.add_argument('--parallelism', '-P',
                         default='20',
                         help='Number of parallel processes')
@@ -81,13 +78,13 @@ def hhi(vector):
     #return (h - 1.0 / n) / (1.0 - 1.0 / n)
 
 
-def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, core_block):
+def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, core_block, engine_configs):
     columns = [('a', 'b', 'c')]
     results_df = pd.DataFrame({}, index=pd.MultiIndex.from_tuples(columns, names=['sp_id', 'city', 'spatial_name']))
     # clean the dataframe
     results_df = results_df[results_df.index.get_level_values('sp_id') == 'Ras']
 
-    conn = psycopg2.connect("dbname=crime-environment host=localhost user=denadai port=50013 password=lollone")
+    conn = psycopg2.connect("dbname={dbname} host={host} user={username} port={port} password={password}".format(**engine_configs))
     conn.autocommit = True
     cur = conn.cursor()
 
@@ -105,11 +102,11 @@ def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, cor
                 ('residential', 'commercial', 'recreational', city_blocks, city))
     query_result = cur.fetchone()
     if query_result is None or np.sum(query_result) == 0:
-        print("a")
+        entropy = 0
         log.warning("land_use_mix3 %s %s %s", city_section, city, spatial_name)
-        return results_df[results_df.index.get_level_values('sp_id') == 'Ras']
-    entropy_stats = np.array(query_result)
-    entropy = stats.entropy(entropy_stats)/np.log(len(entropy_stats))
+    else:
+        entropy_stats = np.array(query_result)
+        entropy = stats.entropy(entropy_stats)/np.log(len(entropy_stats))
     results_df.loc[(city_section, city, spatial_name), "land_use_mix3"] = entropy
 
     assert(0 <= entropy <= 1.0)
@@ -133,9 +130,7 @@ def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, cor
     areas = []
     for r in cur.fetchall():
         areas.append(r[0])
-    if len(areas) == 0:
-        log.warning("avg_block_area %s %s %s", city_section, city, spatial_name)
-        return results_df[results_df.index.get_level_values('sp_id') == 'Ras']
+
     avg_block_area = np.median(np.log(np.array(areas)+1))
     results_df.loc[(city_section, city, spatial_name), "avg_block_area"] = avg_block_area
     results_df.loc[(city_section, city, spatial_name), "n_blocks"] = len(areas)
@@ -219,26 +214,6 @@ def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, cor
     #
     # Covariates
     #
-    '''
-    # Property values
-    cur.execute('select COALESCE(area, 1), COALESCE(value,0) '
-                'from property_value b '
-                'INNER JOIN blocks_group_with_building bb ON b.bid = bb.bid AND b.city = bb.city '
-                'where b.bid = ANY(%s) AND b.city = %s AND value IS NOT NULL AND value > 0',
-                (city_blocks, city))
-    weights = []
-    values = []
-    weighted_avg, weighted_std = 0, 0
-    for r in cur.fetchall():
-        weights.append(1) # r[0]+
-        values.append(r[1])
-    if weights:
-        weighted_avg, weighted_std = weighted_avg_and_std(values, weights)
-
-    results_df.loc[(city_section, city, spatial_name), "property_values_avg"] = weighted_avg
-    results_df.loc[(city_section, city, spatial_name), "building_diversity"] = weighted_std
-    '''
-    ## Alternative
     cur.execute('select COALESCE(area, 1), age '
                 'from property_age b '
                 'where b.bid = ANY(%s) AND b.city = %s AND age > 0',
@@ -305,15 +280,6 @@ def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, cor
     results_df.loc[(city_section, city, spatial_name), "nout"] = nout
     results_df.loc[(city_section, city, spatial_name), "attractiveness"] = attract
 
-    cur.execute("SELECT AVG(ST_DistanceSphere(ext.geom, w.w_geom)) from building ext "
-                "inner join join_building_ways w on w.bid = ext.id "
-                "where ext.bid = %s and ext.city = %s", (core_block, city))
-    dist = 0
-    result = cur.fetchone()
-    if result:
-        dist = result[0]
-    results_df.loc[(city_section, city, spatial_name), 'distance_bld_roads'] = dist
-
     # Ambient
     cur.execute('select num_people '
                 'from ambient_population b '
@@ -373,13 +339,12 @@ def compute_jacobs_attributes(city, city_section, spatial_name, city_blocks, cor
 
 
 def main():
-    cities = ['boston', 'boston1m', 'bogota', 'bogota1m', 'chicago', 'chicago1m', 'LA', 'LA1m']
-    spatial_names = ['ego', 'ego', 'ego', 'ego', 'ego', 'ego', 'ego', 'ego']
+    cities = ['bogota', 'boston', 'boston1m', 'bogota', 'bogota1m', 'chicago', 'chicago1m', 'LA', 'LA1m', 'LA', 'chicago', 'boston']
+    spatial_names = ['core', 'ego', 'ego', 'ego', 'ego', 'ego', 'ego', 'ego', 'ego', 'core', 'core', 'core']
 
     parser = make_argument_parser()
     args = parser.parse_args()
     log.info("PARAMETERS %s", args)
-    spatial_aggregation = args.aggregation
 
     with open('../config/postgres.yaml') as f:
         engine_configs = yaml.load(f, Loader=yaml.FullLoader)
@@ -403,11 +368,11 @@ def main():
     # clean the dataframe
     results_df = results_df[results_df.index.get_level_values('sp_id') == 'Ras']
 
-    df_list = Parallel(n_jobs=int(args.parallelism))(delayed(compute_jacobs_attributes)(city, group_id, spatial_name, city_blocks, cores[(group_id, city, spatial_name)]) for (group_id, city, spatial_name), city_blocks in tqdm(blocks.items()))
+    df_list = Parallel(n_jobs=int(args.parallelism))(delayed(compute_jacobs_attributes)(city, group_id, spatial_name, city_blocks, cores[(group_id, city, spatial_name)], engine_configs) for (group_id, city, spatial_name), city_blocks in tqdm(blocks.items()))
     for df in df_list:
         if not df.empty:
             results_df = results_df.append(df)
-    results_df.to_csv('../data/generated_files/aspatial_features.csv'.format(sp_aggregation=spatial_aggregation))
+    results_df.to_csv('../data/generated_files/aspatial_features.csv')
 
     # crime
     log.info("SAVING CRIME")
@@ -438,12 +403,27 @@ def main():
     # Spatial Matrix - 0-1
     log.info("COMPUTING EGOhoods matrix")
     sql = """
-        select a.sp_id::text as o_sp_id, b.sp_id::text as d_sp_id,  a.city, a.spatial_name 
+        (select a.sp_id::text as o_sp_id, b.sp_id::text as d_sp_id,  a.city, a.spatial_name 
         from spatial_groups a, spatial_groups b 
         where a.spatial_name = b.spatial_name AND a.city = b.city and a.sp_id != b.sp_id 
         and (a.core_id = ANY(b.lower_ids) OR st_touches(a.core_geom, b.core_geom) OR st_intersects(a.core_geom, b.core_geom))
         AND ({})
-        """.format(sql_where)
+        )
+        UNION
+        (
+        SELECT a.sp_id::text as o_sp_id, d_sp_id,  a.city, a.spatial_name
+        from spatial_groups a
+        cross join lateral (select b.sp_id::text as d_sp_id 
+        from spatial_groups as b where a.spatial_name = b.spatial_name AND a.city = b.city and a.sp_id != b.sp_id
+        AND ({})
+        AND NOT EXISTS (select * from spatial_groups c WHERE a.spatial_name = c.spatial_name AND a.city = c.city 
+        and a.sp_id != c.sp_id and (a.core_id = ANY(c.lower_ids) OR st_touches(a.core_geom, c.core_geom) OR st_intersects(a.core_geom, c.core_geom))
+        AND ({}))
+        ORDER BY a.core_geom <-> b.core_geom
+        LIMIT 1) as b 
+        )
+        """.format(sql_where, sql_where, sql_where)
+    print(sql)
     edges_df = pd.read_sql_query(sql, con=engine)
     edges_df.to_parquet('../data/generated_files/egohoods_intersects.parquet')
 

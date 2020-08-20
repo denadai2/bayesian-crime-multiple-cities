@@ -63,12 +63,6 @@ target/
 
 #mine
 .idea/
-data/*
-!data/crime_types
-!data/SQL
-figures/*
-!figures/manuscript
-!figures/manuscript/supplementary
 .DS_Store
 Pipfile
 config/postgres.yaml

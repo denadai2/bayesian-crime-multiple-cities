@@ -2,7 +2,9 @@
 
 This repository contains all the code required to reproduce the results presented in the following paper:
 
-* M. De Nadai et. al. *Socio-economic, built environment, and mobility conditions associated with crime: A study of multiple cities*, 2020 - *Submitted*.
+> M. De Nadai et. al. *Socio-economic, built environment, and mobility conditions associated with crime: A study of multiple cities*, 2020 - *Submitted*.
+
+> **Abstract:** *Nowadays, 23% of the world population lives in multi-million cities. In these metropolises, criminal activity is much higher and violent than in either small cities or rural areas. Thus, understanding what factors influence urban crime in big cities is a pressing need. Seminal studies analyse crime records through historical panel data or analysis of historical patterns combined with ecological factor and exploratory mapping. More recently, machine learning methods have provided informed crime prediction over time. However, previous studies have focused on a single city at a time, considering only a limited number of factors (such as socio-economical characteristics) and often at large in a single city. Hence, our understanding of the factors influencing crime across cultures and cities is very limited. Here we propose a Bayesian model to explore how violent and property crimes are related not only to socio-economic factors but also to the built environmental (e.g. land use) and mobility characteristics of neighbourhoods. To that end, we analyse crime at small areas and integrate multiple open data sources with mobile phone traces to compare how the different factors correlate with crime in diverse cities, namely Boston, Bogotá, Los Angeles and Chicago. We find that the combined use of socio-economic conditions, mobility information and physical characteristics of the neighbourhood effectively explain the emergence of crime, and improve the performance of the traditional approaches. However, we show that the socio-ecological factors of neighbourhoods relate to crime very differently from one city to another. Thus there is clearly no “one fits all” model.*
 
 
 # Dependencies
@@ -32,6 +34,8 @@ The code of the analysis in divided in two parts: the Python scripts and modules
 * `src/preprocess/LA-closed.ipynb` : script used for the pre-processing of all Los Angeles' (closed) data (e.g. mobile phone data).
 * `src/preprocess/chicago.ipynb` : script used for the pre-processing of all Chicago's data.
 
+All the files with `(core)` in the name are used to test the alternative models where the features are computed at the core.
+
 ### Computations
 * `aspatial_compute.py` : script used to compute all the features from PostgreSQL.
 * `prepare_features.ipynb` : script used to generate the consolidated dataset that is used in the regression.
@@ -51,27 +55,28 @@ To do the preprocess steps, please configure `postgres_example.yaml` and rename 
 ### Computed
 You can download the following files:
 
-* [Entire database](https://drive.google.com/file/d/1AzrfcvcSc7ePNegPWTH8idIMqE-aUvQ9/view?usp=sharing)
-* [Spatial neighbouring matrix](https://drive.google.com/file/d/1Lno2815esZHHuR_Sp1S38QPulmlDcaAJ/view?usp=sharing)
-* [Spatial distance matrix](https://drive.google.com/file/d/1014Veo1QW3oPQg0gTemlhUYSRSSJu7t4/view?usp=sharing)
+* [Entire database](https://figshare.com/articles/dataset/Socio-economic_built_environment_and_mobility_conditions_associated_with_crime_A_study_of_multiple_cities/7217729)
 
 These files will be uploaded in a permanent repository upon the acceptance of the paper.
 To load the entire database you can run:
 
 ``` sh
 createdb crime-environment
-pg_restore -d crime-environment -U username -C 2020_04_08.sqldump.gz
+gzip -d 2020_08_03.sqldump.gz
+pg_restore -d crime-environment -U username -C 2020_08_03.sqldump
 ```
 
 ### Aggregated
-Available through permanent links upon the acceptance of the paper
+* [generated_files](https://figshare.com/articles/dataset/Socio-economic_built_environment_and_mobility_conditions_associated_with_crime_A_study_of_multiple_cities/7217729) and place the extracted files in `data/generated_files/`
 
 ### Raw
-Available through permanent links upon the acceptance of the paper
+* [Boston](https://figshare.com/articles/dataset/Socio-economic_built_environment_and_mobility_conditions_associated_with_crime_A_study_of_multiple_cities/7217729) and place the extracted files in `data/`
+* [Bogota](https://figshare.com/articles/dataset/Socio-economic_built_environment_and_mobility_conditions_associated_with_crime_A_study_of_multiple_cities/7217729) and place the extracted files in `data/`
+* [Chicago](https://figshare.com/articles/dataset/Socio-economic_built_environment_and_mobility_conditions_associated_with_crime_A_study_of_multiple_cities/7217729) and place the extracted files in `data/`
+* [Los Angeles](https://figshare.com/articles/dataset/Socio-economic_built_environment_and_mobility_conditions_associated_with_crime_A_study_of_multiple_cities/7217729) and place the extracted files in `data/`
 
 
-## License
-This code is licensed under the MIT license. 
+
 
 
 # DIY Instructions
@@ -140,3 +145,23 @@ You can insert the point of interests in the `venue` table, that has this schema
  ```
  
  Done!
+ 
+## License
+This code is licensed under the MIT license. 
+
+
+## Citation
+If you find this work useful for your research, please cite our paper:
+
+```
+@article{de2020socio,
+  title={Socio-economic, built environment, and mobility conditions associated with crime: A study of multiple cities},
+  author={De Nadai, Marco and Xu, Yanyan and Letouz{\'e}, Emmanuel and Gonz{\'a}lez, Marta C and Lepri, Bruno},
+  journal={arXiv preprint arXiv:2004.05822},
+  year={2020}
+}
+
+```
+
+## Acknowledgements 
+We thank Paolo Bosetti and Junpeng Lao for the helpful comments. We especially thank Andrés Clavijo for his support on the data, we all hope that this work could make Bogotá better. This work was supported by the Berkeley DeepDrive and the ITS Berkeley 2018-19 SB1 Research Grant (to M.C.G.); the French Development Agency and the World Bank (to M.D.N., B.L. and E.L.).
