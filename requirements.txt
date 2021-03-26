@@ -81,5 +81,5 @@ wcwidth==0.1.7
 webencodings==0.5.1
 widgetsnbextension==3.4.0
 xlrd==1.1.0
-pyyaml==5.3.1
+pyyaml==5.4
 basemap==1.2.0
